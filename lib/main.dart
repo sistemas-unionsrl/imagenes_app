@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const MainApp());
@@ -27,6 +29,31 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   final TextEditingController _textController = TextEditingController();
   File? _image;
+  String? _productName;
+
+  Future<void> _fetchProductName() async {
+    final id = _textController.text;
+    if (id.isEmpty) return;
+    final url = 'http://192.168.4.98:8080/ords/ecommerce/productos/get/$id';
+    try {
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        setState(() {
+          _productName = data['nombre_producto'];
+        });
+      } else {
+        setState(() {
+          _productName = 'Producto no encontrado';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _productName = 'Error al conectarse al servicio de nombres.';
+      });
+    }
+  }
 
   Future<void> _takePicture() async {
     final picker = ImagePicker();
@@ -48,6 +75,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
 
     if (await Permission.storage.request().isGranted ||
+        await Permission.mediaLibrary.request().isGranted ||
         await Permission.manageExternalStorage.request().isGranted) {
       final directory = Platform.isAndroid
           ? await getExternalStorageDirectory()
@@ -76,6 +104,7 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() {
       _textController.clear();
       _image = null;
+      _productName = null;
     });
   }
 
@@ -157,15 +186,32 @@ class _MyHomePageState extends State<MyHomePage> {
               style: TextStyle(fontSize: 24),
             ),
             const SizedBox(height: 20),
-            TextField(
-              controller: _textController,
-              readOnly: true,
-              showCursor: false,
-              decoration: const InputDecoration(
-                labelText: 'Código',
-                border: OutlineInputBorder(),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _textController,
+                    readOnly: true,
+                    showCursor: false,
+                    decoration: const InputDecoration(
+                      labelText: 'Codigo',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                ElevatedButton(
+                  onPressed: _fetchProductName,
+                  child: Text('Validar'),
+                ),
+              ],
             ),
+            const SizedBox(height: 10),
+            if (_productName != null)
+              Text(
+                _productName!,
+                style: const TextStyle(fontSize: 18, color: Colors.black),
+              ),
             const SizedBox(height: 20),
             if (_image != null)
               Image.file(
